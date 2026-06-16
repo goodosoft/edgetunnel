@@ -1,12 +1,8 @@
-name = "edgetunnel"
-pages_build_output_dir = "."
+name = "v20251104"
+main = "_worker.js"
 compatibility_date = "2025-11-04"
 keep_vars = true
 
-[[kv_namespaces]]
-binding = "KV"
-id = "edd4f114cc344a47a49a96807fa888a9"
-
-[[env.preview.kv_namespaces]]
-binding = "KV"
-id = "edd4f114cc344a47a49a96807fa888a9"
+#[[kv_namespaces]]
+#binding = "KV"			#KV绑定名默认不可修改
+#id = ""				#KV数据库id
