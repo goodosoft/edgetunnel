@@ -19,14 +19,41 @@ jobs:
       - name: Checkout fork
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Full history is required: a shallow clone has no merge base with
+          # upstream, so every differing file becomes an add/add conflict.
+          fetch-depth: 0
+          # Optional: set a SYNC_TOKEN secret (classic PAT with repo+workflow
+          # scopes) so the sync can also push upstream's workflow-file changes.
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
 
       - name: Sync with upstream
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git remote add upstream https://github.com/cmliu/edgetunnel.git
           git fetch upstream main
-          git checkout main
-          git rebase upstream/main
-          git push origin main --force-with-lease
+
+          # Files this fork owns. They are re-applied on top of upstream on
+          # every sync; anything else on main is overwritten by upstream.
+          FORK_PATHS=".github/workflows/sync-upstream.yml"
+
+          # Build the desired state: upstream/main + fork-owned files.
+          git checkout --detach upstream/main
+          git checkout origin/main -- $FORK_PATHS
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: re-apply fork-specific files on top of upstream"
+          fi
+
+          # Already in sync (same tree, upstream contained in main)? Done.
+          if git diff --quiet HEAD origin/main \
+             && git merge-base --is-ancestor upstream/main origin/main; then
+            echo "Fork already in sync with upstream."
+            exit 0
+          fi
+
+          if ! git push --force-with-lease origin HEAD:main; then
+            echo "::error::Push rejected. If upstream changed files under .github/workflows/, the default GITHUB_TOKEN cannot push them: either click 'Sync fork' on GitHub once, or add a SYNC_TOKEN secret (classic PAT with repo+workflow scopes)."
+            exit 1
+          fi
